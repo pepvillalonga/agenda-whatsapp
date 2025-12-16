@@ -12,6 +12,11 @@ load_dotenv()
 app = FastAPI()
 VERIFY_TOKEN = os.getenv("VERIFY_TOKEN")
 
+# --- AÑADE ESTO A TU MAIN.PY ---
+@app.get("/")
+def home():
+    return "¡Hola! El bot está vivo y funcionando 🤖"
+
 @app.get("/webhook")
 async def verify_webhook(request: Request):
     """Verificación del Webhook por parte de Meta."""

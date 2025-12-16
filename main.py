@@ -129,8 +129,8 @@ async def handle_message(request: Request):
                             except:
                                 tiempo_restante = "Fecha inválida"
 
-                            response_text += f"🔹 *{nombre}*: {fecha} ({tiempo_restante})\nID: `{evt['id']}`\n\n"
-                        response_text += "Para borrar uno, escribe: *borrar ID*"
+                            response_text += f"🔹 *{nombre}*: {fecha} ({tiempo_restante})\n"
+                        response_text += "\nPara borrar uno, escribe: *borrar [nombre del evento]*"
 
                 elif action == "HELP":
                     response_text = (
@@ -144,31 +144,24 @@ async def handle_message(request: Request):
 
                 elif action == "DELETE_SPECIFIC":
                     query_term = decision.get("data", {}).get("query")
-                    # Intentar borrar por ID directo si parece un ID (los IDs de pinecone suelen ser largos o generados)
-                    # Aquí asumiremos búsqueda primero
-                    hits = search_relevant_context(query_term)
-                    if not hits:
-                         response_text = f"❌ No encontré ningún evento parecido a '{query_term}'."
+                    
+                    # 1. Buscar la mejor coincidencia
+                    match = find_best_match(query_term, threshold=0.65)
+                    
+                    if not match:
+                         response_text = f"❌ No encontré ningún evento parecido a '{query_term}' para borrar."
                     else:
-                        # Si encontramos, pedimos confirmación con ID
-                        # Para simplificar, listamos lo encontrado
-                        response_text = f"Encontré esto con '{query_term}'. Para borrar, usa el ID:\n\n"
-                        # Nota: search_relevant_context devuelve strings formateados, no objetos con ID.
-                        # Necesitamos mejorar search_relevant_context o hacer una query manual aquí.
-                        # Por ahora, sugerimos listar.
-                        response_text += "Por favor, escribe 'listar' para ver los IDs exactos y luego 'borrar [ID]'."
-                        # OJO: Si el usuario escribe 'borrar [ID]', el LLM puede interpretarlo como DELETE_SPECIFIC query=[ID]
+                        # 2. Si hay coincidencia, borrar directamente (es más natural)
+                        # Se podría pedir confirmación, pero el usuario pidió "borrar [nombre]".
+                        # Si el threshold es alto, asumimos que es lo correcto.
+                        event_id = match['id']
+                        event_name = match['metadata'].get('nombre', 'Evento')
                         
-                        # Manejo de borrado por ID directo (si el query es un ID exacto que acabamos de ver)
-                        # Esto es complejo sin estado.
-                        # MEJOR ESTRATEGIA: Si el usuario manda un ID de Pinecone (que son evt_timestamp_uuid), el LLM podría pasarlo como query.
-                        # Intentemos borrarlo directamente si tiene formato de ID?
-                        if query_term.startswith("evt_"):
-                             success = delete_event_by_id(query_term)
-                             if success:
-                                 response_text = f"✅ Evento {query_term} eliminado."
-                             else:
-                                 response_text = "❌ No pude borrar ese ID (quizás no existe)."
+                        success = delete_event_by_id(event_id)
+                        if success:
+                             response_text = f"🗑️ He borrado el evento: *{event_name}*."
+                        else:
+                             response_text = "❌ Hubo un error al intentar borrar el evento."
 
 
                 elif action == "EDIT_EVENT":

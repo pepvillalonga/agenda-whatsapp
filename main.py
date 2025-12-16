@@ -37,6 +37,7 @@ async def handle_message(request: Request):
     """Recibe mensajes de WhatsApp."""
     try:
         data = await request.json()
+        print(f"DEBUG Webhook Payload: {data}")
         
         # Estructura típica de webhook de WhatsApp Cloud API
         entry = data.get("entry", [])[0]

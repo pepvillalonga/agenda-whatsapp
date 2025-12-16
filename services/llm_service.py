@@ -34,8 +34,12 @@ def process_message(user_text, memory_context):
     1. Analiza el mensaje del usuario.
     2. Si quiere GUARDAR un evento (ej: "tengo médico el martes"):
        - Extrae: "nombre", "fecha" (YYYY-MM-DD), "hora" (HH:MM).
+       - Extrae cuántos días ANTES quiere ser recordado:
+         * "recuérdame mañana" o "avísame el día anterior" → reminder_days_before: 1
+         * "avísame con 2 días" o "recuérdame dos días antes" → reminder_days_before: 2
+         * Si NO menciona recordatorio, usar por defecto: reminder_days_before: 1
        - Acción: "SAVE".
-       - Respuesta: Confirma que se guardó.
+       - Respuesta: Confirma que se guardó Y menciona cuándo se le recordará.
     3. Si es una CONSULTA (ej: "qué tengo hoy"):
        - Usa la MEMORIA para responder.
        - Acción: "QUERY".
@@ -47,7 +51,10 @@ def process_message(user_text, memory_context):
       "action": "SAVE" | "QUERY",
       "response_text": "Texto para enviar al usuario por WhatsApp",
       "data": {{ 
-         "nombre": "...", "fecha": "YYYY-MM-DD", "hora": "HH:MM" 
+         "nombre": "...", 
+         "fecha": "YYYY-MM-DD", 
+         "hora": "HH:MM",
+         "reminder_days_before": 1
       }} (Solo si action es SAVE, sino null)
     }}
     """

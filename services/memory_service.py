@@ -73,12 +73,18 @@ def save_memory(text, metadata):
         import uuid
         unique_id = f"evt_{int(time.time())}_{str(uuid.uuid4())[:8]}"
         
+        # Determinar días de anticipación para recordatorio
+        reminder_days = metadata.get("reminder_days_before", "1")
+        
         index.upsert(vectors=[
             (unique_id, vector, {
                 "texto": text,
                 "nombre": metadata.get("nombre", "Recordatorio"),
                 "fecha": metadata.get("fecha", ""),
                 "hora": metadata.get("hora", ""),
+                "user_phone": metadata.get("user_phone", ""),
+                "reminder_sent": "false",
+                "reminder_days_before": str(reminder_days),
                 "created_at": str(time.time())
             })
         ])

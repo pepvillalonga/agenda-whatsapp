@@ -8,6 +8,7 @@ from dotenv import load_dotenv
 from services.llm_service import process_message
 from services.memory_service import search_relevant_context, save_memory
 from services.whatsapp_service import send_whatsapp_message
+from services.reminder_service import get_upcoming_reminders, mark_reminder_sent, format_reminder_message
 
 load_dotenv()
 
@@ -80,6 +81,8 @@ async def handle_message(request: Request):
                 if action == "SAVE":
                     event_data = decision.get("data")
                     if event_data:
+                        # Añadir número de teléfono para recordatorios
+                        event_data["user_phone"] = fw_id
                         saved = save_memory(msg_body, event_data)
                         if not saved:
                             response_text = "Tuve un error guardando el recuerdo en mi memoria."
@@ -93,6 +96,38 @@ async def handle_message(request: Request):
     except Exception as e:
         logger.error(f"Error Webhook: {e}")
         return {"status": "error", "message": str(e)}
+
+@app.get("/reminders/check")
+async def check_reminders():
+    """
+    Endpoint para cron job - verifica y envía recordatorios pendientes.
+    Llamar cada hora desde cron-job.org o similar.
+    """
+    try:
+        logger.info("Iniciando verificación de recordatorios...")
+        
+        reminders = get_upcoming_reminders()
+        sent_count = 0
+        
+        for reminder in reminders:
+            user_phone = reminder.get('user_phone')
+            event_id = reminder.get('id')
+            
+            if user_phone and event_id:
+                message = format_reminder_message(reminder)
+                logger.info(f"Enviando recordatorio a {user_phone}: {reminder.get('nombre')}")
+                
+                send_whatsapp_message(user_phone, message)
+                mark_reminder_sent(event_id)
+                sent_count += 1
+        
+        logger.info(f"Recordatorios enviados: {sent_count}")
+        return {"status": "ok", "reminders_sent": sent_count}
+        
+    except Exception as e:
+        logger.error(f"Error en check_reminders: {e}")
+        return {"status": "error", "message": str(e)}
+
 
 if __name__ == "__main__":
     import uvicorn

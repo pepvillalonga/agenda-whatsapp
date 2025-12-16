@@ -8,7 +8,8 @@ load_dotenv()
 PINECONE_API_KEY = os.getenv("PINECONE_API_KEY")
 PINECONE_INDEX = os.getenv("PINECONE_INDEX_NAME")
 HF_TOKEN = os.getenv("HUGGINGFACE_API_TOKEN")
-HF_API_URL = "https://router.huggingface.co/hf-inference/models/sentence-transformers/all-MiniLM-L6-v2"
+# Usar modelo optimizado para embeddings
+HF_API_URL = "https://router.huggingface.co/hf-inference/models/BAAI/bge-small-en-v1.5"
 
 pc = Pinecone(api_key=PINECONE_API_KEY)
 index = pc.Index(PINECONE_INDEX)
@@ -20,15 +21,18 @@ def generate_embedding(text):
         response = requests.post(
             HF_API_URL, 
             headers=headers, 
-            json={"inputs": [text], "options": {"wait_for_model": True}}
+            json={"inputs": text, "options": {"wait_for_model": True}}
         )
         if response.status_code == 200:
-            # La API devuelve una lista de float directamente o lista de listas
             data = response.json()
-            # Si enviamos lista [text], nos devuelve [[embedding]]
-            if isinstance(data, list) and len(data) > 0 and isinstance(data[0], list):
-                return data[0]
-            return data
+            # BGE devuelve directamente una lista de floats para un solo texto
+            if isinstance(data, list) and len(data) > 0:
+                # Si es lista de listas (batch), tomamos el primero
+                if isinstance(data[0], list):
+                    return data[0]
+                # Si es lista de floats directamente
+                return data
+            return None
         print(f"Error HF: {response.status_code} - {response.text}")
         return None
     except Exception as e:

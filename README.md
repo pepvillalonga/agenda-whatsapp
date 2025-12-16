@@ -2,7 +2,7 @@
 
 Backend para Agenda Inteligente que funciona a través de WhatsApp, utilizando **FastAPI**, **Groq** (LLM), **Pinecone** (Memoria Vectorial) y **HuggingFace** (Embeddings).
 
-Ahora incluye un sistema de **Recordatorios Automáticos** programados.
+Ahora incluye un sistema de **Recordatorios Automáticos** programados y gestión avanzada de eventos.
 
 ## 🚀 Stack Tecnológico
 
@@ -12,6 +12,27 @@ Ahora incluye un sistema de **Recordatorios Automáticos** programados.
 -   **Embeddings**: HuggingFace Inference API (`BAAI/bge-small-en-v1.5`).
 -   **Mensajería**: WhatsApp Cloud API.
 -   **Tasks**: Cron jobs externos.
+
+## ✨ Funcionalidades
+
+Interactúa con tu agenda usando lenguaje natural. Comandos soportados:
+
+-   **Guardar Eventos**:
+    -   "Tengo dentista mañana a las 10"
+    -   "Recordar cumpleaños de Ana el 15 de Octubre"
+-   **Consultar Agenda**:
+    -   "¿Qué tengo hoy?"
+    -   "¿Cuándo es la cita del médico?"
+-   **Editar Eventos**:
+    -   "Cambiar la cita del médico a las 18:00"
+    -   "Mover la reunión de mañana al viernes"
+-   **Eliminar Eventos**:
+    -   "Borrar la reunión de ayer"
+    -   "Eliminar cita dentista"
+    -   "Borrar todo" (Requiere confirmación)
+-   **Listar Pendientes**:
+    -   "Ver mis recordatorios"
+    -   "Listar todo"
 
 ## ⚙️ Configuración
 
@@ -43,13 +64,26 @@ Ahora incluye un sistema de **Recordatorios Automáticos** programados.
     PINECONE_INDEX_NAME=nombre_indice
     ```
 
-## ▶️ Ejecución Local
+## ▶️ Ejecución
 
-Levanta el servidor con Uvicorn:
+### Servidor Local
+Levanta el servidor con Uvicorn para desarrollo:
 ```bash
 uvicorn main:app --reload
 ```
 El servidor correrá en `http://localhost:8000`.
+
+### Tests de Integridad
+Verifica que todos los servicios y credenciales funcionen correctamente:
+```bash
+python check_integrity.py
+```
+
+### Suite de Pruebas
+Ejecuta la suite completa de tests automatizados (mocking de servicios externos):
+```bash
+python test_suite.py
+```
 
 ## 🌐 Exponer a Internet (Webhook)
 
@@ -65,22 +99,13 @@ Para conectar con WhatsApp necesitas una URL pública (HTTPS).
 
 ## ⏰ Recordatorios Automáticos (Cron Job)
 
-El sistema soporta recordatorios proactivos (ej: "Tienes dentista mañana"). Para que funcionen, necesitas un "trigger" externo que despierte al bot periódicamente.
+El sistema soporta recordatorios proactivos (ej: "Tienes dentista mañana").
 
-1.  Despliega tu backend en un servicio como **Render**, **Railway** o **Heroku**.
-2.  Usa un servicio de Cron gratuito como [cron-job.org](https://cron-job.org/).
-3.  Crea un nuevo Cron Job:
+1.  Despliega tu backend (Render, Railway, Heroku).
+2.  Configura un **Cron Job** (ej. cron-job.org) para llamar a tu endpoint cada hora:
     -   **URL**: `https://tu-app-desplegada.onrender.com/reminders/check`
     -   **Método**: GET
-    -   **Frecuencia**: Cada 1 hora (o cada 30 min).
-    -   **Timezone**: Europe/Madrid (importante para que no te despierte de madrugada).
-
-### Cómo funciona:
--   El usuario dice: *"Recuérdame la cita del médico mañana"*.
--   El LLM guarda el evento y configura `reminder_days_before: 1`.
--   El Cron Job llama a `/reminders/check` cada hora.
--   El sistema revisa si hoy es el día de avisar (Fecha Evento - 1 día).
--   Si coincide, envía un WhatsApp proactivo al usuario.
+    -   **Timezone**: Europe/Madrid
 
 ---
 *Backend listo para producción con arquitectura modular.*

@@ -60,9 +60,10 @@ def save_memory(text, metadata):
         return False
         
     try:
-        # ID único basado en timestamp
+        # ID único basado en timestamp + uuid
         import time
-        unique_id = f"evt_{int(time.time())}"
+        import uuid
+        unique_id = f"evt_{int(time.time())}_{str(uuid.uuid4())[:8]}"
         
         index.upsert(vectors=[
             (unique_id, vector, {

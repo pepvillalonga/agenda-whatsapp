@@ -97,7 +97,14 @@ def process_message(user_text, memory_context):
             response_format={"type": "json_object"}
         )
         
-        return json.loads(completion.choices[0].message.content)
+        content = completion.choices[0].message.content
+        # Limpiar posibles bloques de código markdown
+        if "```json" in content:
+            content = content.replace("```json", "").replace("```", "")
+        elif "```" in content:
+            content = content.replace("```", "")
+            
+        return json.loads(content)
     except Exception as e:
         print(f"Groq Error: {e}")
         return {

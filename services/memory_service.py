@@ -20,11 +20,15 @@ def generate_embedding(text):
         response = requests.post(
             HF_API_URL, 
             headers=headers, 
-            json={"inputs": text, "options": {"wait_for_model": True}}
+            json={"inputs": [text], "options": {"wait_for_model": True}}
         )
         if response.status_code == 200:
-            # La API devuelve una lista de float directamente
-            return response.json()
+            # La API devuelve una lista de float directamente o lista de listas
+            data = response.json()
+            # Si enviamos lista [text], nos devuelve [[embedding]]
+            if isinstance(data, list) and len(data) > 0 and isinstance(data[0], list):
+                return data[0]
+            return data
         print(f"Error HF: {response.status_code} - {response.text}")
         return None
     except Exception as e:

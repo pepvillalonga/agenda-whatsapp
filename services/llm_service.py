@@ -32,30 +32,57 @@ def process_message(user_text, memory_context):
     
     INSTRUCCIONES:
     1. Analiza el mensaje del usuario.
-    2. Si quiere GUARDAR un evento (ej: "tengo médico el martes"):
+    
+    2. CASO LISTAR (LIST):
+       - Si pide "listar", "ver recordatorios", "qué tengo pendiente":
+         * Acción: "LIST_REMINDERS"
+         * Respuesta: "Aquí tienes tus recordatorios:" (El código listará los detalles).
+
+    3. CASO AYUDA (HELP):
+       - Si escribe "ayuda", "comandos", "qué puedes hacer":
+         * Acción: "HELP"
+         * Respuesta: (El código enviará la lista de comandos).
+
+    4. CASO BORRADO TOTAL vs ESPECÍFICO:
+       - "borrar todo", "resetea la agenda" -> Acción: "ASK_DELETE_CONFIRMATION".
+       - "CONFIRMAR BORRADO TOTAL" -> Acción: "DELETE_ALL".
+       - "borrar [algo]" (ej: "borrar dentista", "eliminar cita médico"):
+         * Acción: "DELETE_SPECIFIC"
+         * Extrae "query": "dentista"
+
+    5. CASO EDITAR (EDIT):
+       - "cambiar [algo] a [fecha/hora]" o "modificar [algo]":
+         * Acción: "EDIT_EVENT"
+         * Extrae "query": lo que quiere cambiar (ej: "dentista")
+         * Extrae cambios: "new_date" (YYYY-MM-DD), "new_time" (HH:MM), "new_name".
+         * Si no menciona un campo, déjalo null.
+
+    6. CASO GUARDAR (SAVE):
+       - Si quiere GUARDAR un evento (ej: "tengo médico el martes"):
        - Extrae: "nombre", "fecha" (YYYY-MM-DD), "hora" (HH:MM).
-       - Extrae cuántos días ANTES quiere ser recordado:
-         * "recuérdame mañana" o "avísame el día anterior" → reminder_days_before: 1
-         * "avísame con 2 días" o "recuérdame dos días antes" → reminder_days_before: 2
-         * Si NO menciona recordatorio, usar por defecto: reminder_days_before: 1
+       - Extrae días aviso: "recordar 1 día antes" -> reminder_days_before.
        - Acción: "SAVE".
-       - Respuesta: Confirma que se guardó Y menciona cuándo se le recordará.
-    3. Si es una CONSULTA (ej: "qué tengo hoy"):
-       - Usa la MEMORIA para responder.
-       - Acción: "QUERY".
-       - Respuesta: Resumen amigable.
-    4. Responde SIEMPRE en formato JSON estricto.
+
+    7. CASO CONSULTAR (QUERY):
+       - "qué tengo hoy", "busca eventos de X":
+         * Acción: "QUERY"
+
+    8. Responde SIEMPRE en formato JSON estricto.
     
     FORMATO JSON ESPERADO:
     {{
-      "action": "SAVE" | "QUERY",
-      "response_text": "Texto para enviar al usuario por WhatsApp",
+      "action": "SAVE" | "QUERY" | "LIST_REMINDERS" | "HELP" | "DELETE_SPECIFIC" | "EDIT_EVENT" | "ASK_DELETE_CONFIRMATION" | "DELETE_ALL",
+      "response_text": "Texto respuesta",
       "data": {{ 
          "nombre": "...", 
          "fecha": "YYYY-MM-DD", 
          "hora": "HH:MM",
-         "reminder_days_before": 1
-      }} (Solo si action es SAVE, sino null)
+         "reminder_days_before": 1,
+         "query": "termino busqueda para borrar/editar",
+         "new_name": "...",
+         "new_date": "...",
+         "new_time": "..."
+      }}
     }}
     """
     

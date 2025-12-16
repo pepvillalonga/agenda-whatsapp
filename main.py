@@ -6,7 +6,9 @@ import logging
 from dotenv import load_dotenv
 
 from services.llm_service import process_message
-from services.memory_service import search_relevant_context, save_memory
+from services.memory_service import search_relevant_context, save_memory, delete_all_memories, get_all_active_events, delete_event_by_id, find_best_match
+from datetime import datetime, timedelta
+import pytz
 from services.whatsapp_service import send_whatsapp_message
 from services.reminder_service import get_upcoming_reminders, mark_reminder_sent, format_reminder_message
 
@@ -86,8 +88,131 @@ async def handle_message(request: Request):
                         saved = save_memory(msg_body, event_data)
                         if not saved:
                             response_text = "Tuve un error guardando el recuerdo en mi memoria."
+                        if not saved:
+                            response_text = "Tuve un error guardando el recuerdo en mi memoria."
                 
-                # 4. Responder al usuario
+                elif action == "DELETE_ALL":
+                    success = delete_all_memories()
+                    if success:
+                        response_text = "✅ Memoria borrada completamente. No recuerdo nada."
+                    else:
+                        response_text = "❌ Hubo un error al intentar borrar la memoria."
+                
+                elif action == "ASK_DELETE_CONFIRMATION":
+                    # El response_text ya trae la pregunta del LLM
+                    pass
+
+                elif action == "LIST_REMINDERS":
+                    events = get_all_active_events()
+                    if not events:
+                        response_text = "📭 No tienes recordatorios pendientes."
+                    else:
+                        response_text = "📋 *Tus Recordatorios:*\n\n"
+                        for evt in events:
+                            meta = evt['metadata']
+                            nombre = meta.get('nombre', 'Evento')
+                            fecha = meta.get('fecha', 'N/A')
+                            # Calcular tiempo restante
+                            try:
+                                tz = pytz.timezone("Europe/Madrid")
+                                now = datetime.now(tz)
+                                event_date = datetime.strptime(fecha, "%Y-%m-%d")
+                                event_date = tz.localize(event_date)
+                                delta = event_date - now
+                                days = delta.days
+                                if days < 0:
+                                    tiempo_restante = "Vencido"
+                                elif days == 0:
+                                    tiempo_restante = "Hoy"
+                                else:
+                                    tiempo_restante = f"Faltan {days} días"
+                            except:
+                                tiempo_restante = "Fecha inválida"
+
+                            response_text += f"🔹 *{nombre}*: {fecha} ({tiempo_restante})\nID: `{evt['id']}`\n\n"
+                        response_text += "Para borrar uno, escribe: *borrar ID*"
+
+                elif action == "HELP":
+                    response_text = (
+                        "🤖 *Comandos de la Agenda:*\n\n"
+                        "📌 *Guardar*: 'Cita dentista mañana a las 10'\n"
+                        "🔍 *Consultar*: '¿Qué tengo esta semana?'\n"
+                        "📋 *Listar*: 'Listar recordatorios'\n"
+                        "🗑️ *Borrar*: 'Borrar [nombre]' o 'Borrar ID'\n"
+                        "⚠️ *Reset*: 'Borrar todo'\n"
+                    )
+
+                elif action == "DELETE_SPECIFIC":
+                    query_term = decision.get("data", {}).get("query")
+                    # Intentar borrar por ID directo si parece un ID (los IDs de pinecone suelen ser largos o generados)
+                    # Aquí asumiremos búsqueda primero
+                    hits = search_relevant_context(query_term)
+                    if not hits:
+                         response_text = f"❌ No encontré ningún evento parecido a '{query_term}'."
+                    else:
+                        # Si encontramos, pedimos confirmación con ID
+                        # Para simplificar, listamos lo encontrado
+                        response_text = f"Encontré esto con '{query_term}'. Para borrar, usa el ID:\n\n"
+                        # Nota: search_relevant_context devuelve strings formateados, no objetos con ID.
+                        # Necesitamos mejorar search_relevant_context o hacer una query manual aquí.
+                        # Por ahora, sugerimos listar.
+                        response_text += "Por favor, escribe 'listar' para ver los IDs exactos y luego 'borrar [ID]'."
+                        # OJO: Si el usuario escribe 'borrar [ID]', el LLM puede interpretarlo como DELETE_SPECIFIC query=[ID]
+                        
+                        # Manejo de borrado por ID directo (si el query es un ID exacto que acabamos de ver)
+                        # Esto es complejo sin estado.
+                        # MEJOR ESTRATEGIA: Si el usuario manda un ID de Pinecone (que son evt_timestamp_uuid), el LLM podría pasarlo como query.
+                        # Intentemos borrarlo directamente si tiene formato de ID?
+                        if query_term.startswith("evt_"):
+                             success = delete_event_by_id(query_term)
+                             if success:
+                                 response_text = f"✅ Evento {query_term} eliminado."
+                             else:
+                                 response_text = "❌ No pude borrar ese ID (quizás no existe)."
+
+
+                elif action == "EDIT_EVENT":
+                    query_term = decision.get("data", {}).get("query")
+                    new_name = decision.get("data", {}).get("new_name")
+                    new_date = decision.get("data", {}).get("new_date")
+                    new_time = decision.get("data", {}).get("new_time")
+                    
+                    match = find_best_match(query_term)
+                    
+                    if match:
+                        old_id = match['id']
+                        old_meta = match['metadata']
+                        
+                        # Preparar nuevos datos
+                        final_name = new_name if new_name else old_meta.get('nombre')
+                        final_date = new_date if new_date else old_meta.get('fecha')
+                        final_time = new_time if new_time else old_meta.get('hora')
+                        
+                        # Construir nuevo texto para vectorizar
+                        new_text = f"Recordatorio: {final_name} el {final_date} a las {final_time}"
+                        
+                        # Datos para save_memory
+                        event_data = {
+                            "nombre": final_name,
+                            "fecha": final_date,
+                            "hora": final_time,
+                            "user_phone": fw_id,
+                            "reminder_days_before": old_meta.get('reminder_days_before', '1')
+                        }
+                        
+                        # Transacción atómica idealmente, pero aquí paso a paso
+                        # Borrar viejo
+                        delete_event_by_id(old_id)
+                        # Crear nuevo
+                        saved = save_memory(new_text, event_data)
+                        
+                        if saved:
+                             response_text = f"✅ He actualizado el evento.\nAhora es: *{final_name}* el {final_date} {final_time}"
+                        else:
+                             response_text = "❌ Pude borrar el viejo pero fallé al guardar el nuevo. Lo siento."
+                    else:
+                        response_text = f"❌ No encontré el evento '{query_term}' para editar."
+
                 logger.info(f"Enviando respuesta a {fw_id}: {response_text}")
                 send_whatsapp_message(fw_id, response_text)
                 
@@ -95,6 +220,53 @@ async def handle_message(request: Request):
         
     except Exception as e:
         logger.error(f"Error Webhook: {e}")
+        return {"status": "error", "message": str(e)}
+
+@app.get("/summary/weekly")
+async def weekly_summary():
+    """Genera y envía un resumen semanal (Domingo noche)."""
+    try:
+        events = get_all_active_events()
+        # Filtrar próxima semana
+        tz = pytz.timezone("Europe/Madrid")
+        now = datetime.now(tz)
+        week_end = now + timedelta(days=7)
+        
+        upcoming = []
+        for evt in events:
+            try:
+                date_str = evt['metadata'].get('fecha')
+                if not date_str: continue
+                
+                evt_date = datetime.strptime(date_str, "%Y-%m-%d")
+                evt_date = tz.localize(evt_date)
+                
+                if now <= evt_date <= week_end:
+                    upcoming.append(evt)
+            except:
+                continue
+                
+        if not upcoming:
+            return {"status": "no events"}
+            
+        # Agrupar por "tipo" (simple conteo por ahora)
+        count = len(upcoming)
+        
+        # Enviar a todos los usuarios únicos encontrados (o hardcoded si es personal)
+        # Aquí asumiremos que extraemos los teléfonos de los eventos
+        phones = set(e['metadata'].get('user_phone') for e in upcoming if e['metadata'].get('user_phone'))
+        
+        msg = f"📅 *Resumen Semanal*\nEsta semana tienes *{count}* eventos pendientes.\n\n"
+        for evt in upcoming:
+            meta = evt['metadata']
+            msg += f"- {meta.get('nombre')} ({meta.get('fecha')})\n"
+            
+        for phone in phones:
+            send_whatsapp_message(phone, msg)
+            
+        return {"status": "ok", "sent_to": list(phones)}
+    except Exception as e:
+        logger.error(f"Error Weekly Summary: {e}")
         return {"status": "error", "message": str(e)}
 
 @app.get("/reminders/check")

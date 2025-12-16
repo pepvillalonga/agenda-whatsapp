@@ -92,3 +92,55 @@ def save_memory(text, metadata):
     except Exception as e:
         print(f"Pinecone Save Error: {e}")
         return False
+
+def delete_all_memories():
+    """Borra TODOS los vectores del índice Pinecone."""
+    try:
+        index.delete(delete_all=True)
+        return True
+    except Exception as e:
+        print(f"Pinecone Delete All Error: {e}")
+        return False
+
+def get_all_active_events(limit=100):
+    """Recupera todos los eventos activos (recordatorio no enviado o futuros)."""
+    try:
+        # Vector dummy
+        results = index.query(
+            vector=[0.0] * 384,
+            top_k=limit,
+            include_metadata=True,
+            filter={"reminder_sent": {"$eq": "false"}} 
+        )
+        return results.get('matches', [])
+    except Exception as e:
+        print(f"Pinecone Fetch Error: {e}")
+        return []
+
+def delete_event_by_id(event_id):
+    """Borra un evento específico por ID."""
+    try:
+        index.delete(ids=[event_id])
+        return True
+    except Exception as e:
+        print(f"Pinecone Delete ID Error: {e}")
+        return False
+
+def find_best_match(text, threshold=0.7):
+    """Busca el mejor evento coincidente y devuelve su ID y metadata."""
+    vector = generate_embedding(text)
+    if not vector:
+        return None
+        
+    try:
+        results = index.query(
+            vector=vector,
+            top_k=1,
+            include_metadata=True
+        )
+        if results['matches'] and results['matches'][0]['score'] > threshold:
+            return results['matches'][0]
+        return None
+    except Exception as e:
+        print(f"Pinecone Search Error: {e}")
+        return None

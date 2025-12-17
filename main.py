@@ -5,11 +5,11 @@ import sys
 import logging
 from dotenv import load_dotenv
 
-from services.llm_service import process_message
+from services.llm_service import process_message, transcribe_audio
 from services.memory_service import search_relevant_context, save_memory, delete_all_memories, get_all_active_events, delete_event_by_id, find_best_match
 from datetime import datetime, timedelta
 import pytz
-from services.whatsapp_service import send_whatsapp_message
+from services.whatsapp_service import send_whatsapp_message, get_media_url, download_media
 from services.reminder_service import get_upcoming_reminders, mark_reminder_sent, format_reminder_message
 
 load_dotenv()
@@ -61,10 +61,41 @@ async def handle_message(request: Request):
         if messages:
             msg = messages[0]
             logger.info(f"Mensaje recibido: {msg}")
+            
+            fw_id = msg.get("from") # Número del usuario
+            msg_body = ""
+
+            # --- MANEJO DE TEXTO ---
             if msg.get("type") == "text":
-                fw_id = msg.get("from") # Número del usuario
                 msg_body = msg.get("text", {}).get("body", "")
-                logger.info(f"Texto: {msg_body} de {fw_id}")
+
+            # --- MANEJO DE AUDIO (NOTAS DE VOZ) ---
+            elif msg.get("type") == "audio":
+                audio_id = msg.get("audio", {}).get("id")
+                logger.info(f"Recibida nota de voz ID: {audio_id}")
+                
+                # 1. Obtener URL
+                media_url = get_media_url(audio_id)
+                if media_url:
+                    # 2. Descargar binario
+                    audio_bytes = download_media(media_url)
+                    if audio_bytes:
+                        # 3. Transcribir
+                        transcription = transcribe_audio(audio_bytes)
+                        if transcription:
+                            msg_body = transcription
+                            logger.info(f"Transcripción: {msg_body}")
+                            send_whatsapp_message(fw_id, f"🗣️ Escuchado: \"{msg_body}\"")
+                        else:
+                            send_whatsapp_message(fw_id, "❌ No pude entender el audio.")
+                    else:
+                        send_whatsapp_message(fw_id, "❌ Error descargando el audio.")
+                else:
+                    send_whatsapp_message(fw_id, "❌ Error obteniendo URL del audio.")
+
+            # Si tenemos texto (ya sea directo o transcrito), procesamos
+            if msg_body:
+                logger.info(f"Procesando texto: {msg_body} de {fw_id}")
                 
                 # --- LÓGICA PRINCIPAL ---
                 

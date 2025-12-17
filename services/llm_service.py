@@ -112,3 +112,22 @@ def process_message(user_text, memory_context):
             "response_text": "Lo siento, tuve un problema procesando tu mensaje.",
             "data": None
         }
+
+def transcribe_audio(audio_bytes):
+    """Transcribe audio usando Groq Whisper."""
+    try:
+        # Groq espera un archivo con nombre, así que usamos una tupla
+        # (filename, content, content_type)
+        files = ("audio.ogg", audio_bytes, "audio/ogg")
+        
+        transcription = client.audio.transcriptions.create(
+            file=files,
+            model="whisper-large-v3",
+            response_format="json",
+            language="es",
+            temperature=0.0
+        )
+        return transcription.text
+    except Exception as e:
+        print(f"Error transcribiendo audio: {e}")
+        return None

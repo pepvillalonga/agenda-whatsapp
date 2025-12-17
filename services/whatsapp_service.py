@@ -31,3 +31,32 @@ def send_whatsapp_message(to_number, text_body):
     except Exception as e:
         print(f"Exception WhatsApp: {e}")
         return False
+
+def get_media_url(media_id):
+    """Obtiene la URL de descarga de un archivo multimedia."""
+    try:
+        url = f"https://graph.facebook.com/v18.0/{media_id}"
+        headers = {
+            "Authorization": f"Bearer {WA_TOKEN}"
+        }
+        response = requests.get(url, headers=headers)
+        if response.status_code == 200:
+            return response.json().get("url")
+        return None
+    except Exception as e:
+        print(f"Error getting media URL: {e}")
+        return None
+
+def download_media(media_url):
+    """Descarga el contenido binario del medio."""
+    try:
+        headers = {
+            "Authorization": f"Bearer {WA_TOKEN}"
+        }
+        response = requests.get(media_url, headers=headers)
+        if response.status_code == 200:
+            return response.content
+        return None
+    except Exception as e:
+        print(f"Error downloading media: {e}")
+        return None
